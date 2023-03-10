@@ -28,44 +28,26 @@ PYBIND11_MODULE(pyTTD, m) {
         .def_readonly("path", &TTD::TTD_Replay_Module::path);
 
     py::class_<TTD::TTD_Replay_ThreadInfo, std::unique_ptr<TTD::TTD_Replay_ThreadInfo, py::nodelete>>(m, "ThreadInfo")
-        .def_readonly("threadid", &TTD::TTD_Replay_ThreadInfo::threadid); 
-    py::class_<TTD::TTD_Replay_ActiveThreadInfo, std::unique_ptr<TTD::TTD_Replay_ActiveThreadInfo, py::nodelete>>(m, "ActiveThreadInfo")
-        .def_property("threadid", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
-            return self.info->threadid;
-        }, nullptr)
-        .def_readonly("next_major", &TTD::TTD_Replay_ActiveThreadInfo::nextMajor)
-        .def_readonly("next_minor", &TTD::TTD_Replay_ActiveThreadInfo::nextMinor)
-        .def_readonly("last_major", &TTD::TTD_Replay_ActiveThreadInfo::lastMajor)
-        .def_readonly("last_minor", &TTD::TTD_Replay_ActiveThreadInfo::lastMinor);
+        .def_readonly("threadid", &TTD::TTD_Replay_ThreadInfo::threadid);
 
-    py::class_<TTD::TTD_Replay_RegisterContext, std::unique_ptr<TTD::TTD_Replay_RegisterContext, py::nodelete>>(m, "RegisterContext")
-        .def_readonly("cs", &TTD::TTD_Replay_RegisterContext::cs)
-        .def_readonly("ds", &TTD::TTD_Replay_RegisterContext::ds)
-        .def_readonly("es", &TTD::TTD_Replay_RegisterContext::es)
-        .def_readonly("fs", &TTD::TTD_Replay_RegisterContext::fs)
-        .def_readonly("gs", &TTD::TTD_Replay_RegisterContext::gs)
-        .def_readonly("ss", &TTD::TTD_Replay_RegisterContext::ss)
-        .def_readonly("efl", &TTD::TTD_Replay_RegisterContext::efl)
-        .def_readonly("rax", &TTD::TTD_Replay_RegisterContext::rax)
-        .def_readonly("rbx", &TTD::TTD_Replay_RegisterContext::rbx)
-        .def_readonly("rcx", &TTD::TTD_Replay_RegisterContext::rcx)
-        .def_readonly("rdx", &TTD::TTD_Replay_RegisterContext::rdx)
-        .def_readonly("rsi", &TTD::TTD_Replay_RegisterContext::rsi)
-        .def_readonly("rdi", &TTD::TTD_Replay_RegisterContext::rdi)
-        .def_readonly("rsp", &TTD::TTD_Replay_RegisterContext::rsp)
-        .def_readonly("rbp", &TTD::TTD_Replay_RegisterContext::rbp)
-        .def_readonly("r8", &TTD::TTD_Replay_RegisterContext::r8)
-        .def_readonly("r9", &TTD::TTD_Replay_RegisterContext::r9)
-        .def_readonly("r10", &TTD::TTD_Replay_RegisterContext::r10)
-        .def_readonly("r11", &TTD::TTD_Replay_RegisterContext::r11)
-        .def_readonly("r12", &TTD::TTD_Replay_RegisterContext::r12)
-        .def_readonly("r13", &TTD::TTD_Replay_RegisterContext::r13)
-        .def_readonly("r14", &TTD::TTD_Replay_RegisterContext::r14)
-        .def_readonly("r15", &TTD::TTD_Replay_RegisterContext::r15)
-        .def_readonly("rip", &TTD::TTD_Replay_RegisterContext::rip)
-        .def_readonly("fpcw", &TTD::TTD_Replay_RegisterContext::fpcw);
+    py::class_<TTD::TTD_Replay_Exception, std::unique_ptr<TTD::TTD_Replay_Exception, py::nodelete>>(m, "ExceptionInfo")
+        .def_readonly("exception_code", &TTD::TTD_Replay_Exception::ExceptionCode)
+        .def_readonly("exception_flags", &TTD::TTD_Replay_Exception::ExceptionFlags)
+        .def_readonly("exception_record", &TTD::TTD_Replay_Exception::ExceptionRecord)
+        .def_readonly("exception_address", &TTD::TTD_Replay_Exception::ExceptionAddress);
 
+    py::class_<TTD::TTD_Replay_Event<TTD::TTD_Replay_Module*>, std::unique_ptr<TTD::TTD_Replay_Event<TTD::TTD_Replay_Module*>, py::nodelete>>(m, "ModuleEvent")
+        .def_readonly("position", &TTD::TTD_Replay_Event<TTD::TTD_Replay_Module*>::pos)
+        .def_readonly("info", &TTD::TTD_Replay_Event<TTD::TTD_Replay_Module*>::info);
 
+    py::class_<TTD::TTD_Replay_Event<TTD::TTD_Replay_ThreadInfo*>, std::unique_ptr<TTD::TTD_Replay_Event<TTD::TTD_Replay_ThreadInfo*>, py::nodelete>>(m, "ThreadEvent")
+        .def_readonly("position", &TTD::TTD_Replay_Event<TTD::TTD_Replay_ThreadInfo*>::pos)
+        .def_readonly("info", &TTD::TTD_Replay_Event<TTD::TTD_Replay_ThreadInfo*>::info);
+
+    py::class_<TTD::TTD_Replay_Event<TTD::TTD_Replay_Exception>, std::unique_ptr<TTD::TTD_Replay_Event<TTD::TTD_Replay_Exception>, py::nodelete>>(m, "ExceptionEvent")
+        .def_readonly("position", &TTD::TTD_Replay_Event<TTD::TTD_Replay_Exception>::pos)
+        .def_readonly("info", &TTD::TTD_Replay_Event<TTD::TTD_Replay_Exception>::info);
+    
     py::class_<TTD::Position, std::unique_ptr<TTD::Position, py::nodelete>>(m, "Position")
         .def_readwrite("major", &TTD::Position::Major)
         .def_readwrite("minor", &TTD::Position::Minor)
@@ -75,7 +57,81 @@ PYBIND11_MODULE(pyTTD, m) {
                 sprintf_s(out, "<Position %llx:%llx>", pos->Major, pos->Minor);
                 return std::string(out);
             }
-    );
+        )
+        .def("__lt__", [](TTD::Position &self, const TTD::Position &b) {
+                return self < b;
+            }, py::is_operator())
+        .def("__gt__", [](TTD::Position& self, const TTD::Position& b) {
+                return self > b;
+        }, py::is_operator())
+        .def("__eq__", [](TTD::Position& self, const TTD::Position& b) {
+            return (self.Major == b.Major) && (self.Minor == b.Minor);
+        }, py::is_operator());
+
+    py::class_<TTD::TTD_Replay_ActiveThreadInfo, std::unique_ptr<TTD::TTD_Replay_ActiveThreadInfo, py::nodelete>>(m, "ActiveThreadInfo")
+        .def_property("threadid", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
+            return self.info->threadid;
+        }, nullptr)
+        .def_property("next_major", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
+            return self.next.Major;
+        }, nullptr)
+        .def_property("next_minor", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
+            return self.next.Minor;
+        }, nullptr)
+        .def_property("last_major", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
+            return self.last.Major;
+        }, nullptr)
+        .def_property("last_minor", [](TTD::TTD_Replay_ActiveThreadInfo& self) {
+            return self.last.Minor;
+        }, nullptr);
+
+    // x86_64 context
+    py::class_<CONTEXT, std::unique_ptr<CONTEXT, py::nodelete>>(m, "Context")
+        .def_readonly("seg_cs", &CONTEXT::SegCs)
+        .def_readonly("seg_ds", &CONTEXT::SegDs)
+        .def_readonly("seg_es", &CONTEXT::SegEs)
+        .def_readonly("seg_fs", &CONTEXT::SegFs)
+        .def_readonly("seg_gs", &CONTEXT::SegGs)
+        .def_readonly("seg_ss", &CONTEXT::SegSs)
+        .def_readonly("eflags", &CONTEXT::EFlags)
+        .def_readonly("rax", &CONTEXT::Rax)
+        .def_readonly("rbx", &CONTEXT::Rbx)
+        .def_readonly("rcx", &CONTEXT::Rcx)
+        .def_readonly("rdx", &CONTEXT::Rdx)
+        .def_readonly("rsi", &CONTEXT::Rsi)
+        .def_readonly("rdi", &CONTEXT::Rdi)
+        .def_readonly("rsp", &CONTEXT::Rsp)
+        .def_readonly("rbp", &CONTEXT::Rbp)
+        .def_readonly("r8", &CONTEXT::R8)
+        .def_readonly("r9", &CONTEXT::R9)
+        .def_readonly("r10", &CONTEXT::R10)
+        .def_readonly("r11", &CONTEXT::R11)
+        .def_readonly("r12", &CONTEXT::R12)
+        .def_readonly("r13", &CONTEXT::R13)
+        .def_readonly("r14", &CONTEXT::R14)
+        .def_readonly("r15", &CONTEXT::R15)
+        .def_readonly("rip", &CONTEXT::Rip)
+        .def_readonly("fltsave", &CONTEXT::FltSave);
+
+    // x86 context
+    py::class_<WOW64_CONTEXT, std::unique_ptr<WOW64_CONTEXT, py::nodelete>>(m, "WOW64_Context")
+        .def_readonly("seg_cs", &WOW64_CONTEXT::SegCs)
+        .def_readonly("seg_ds", &WOW64_CONTEXT::SegDs)
+        .def_readonly("seg_es", &WOW64_CONTEXT::SegEs)
+        .def_readonly("seg_fs", &WOW64_CONTEXT::SegFs)
+        .def_readonly("seg_gs", &WOW64_CONTEXT::SegGs)
+        .def_readonly("seg_ss", &WOW64_CONTEXT::SegSs)
+        .def_readonly("eflags", &WOW64_CONTEXT::EFlags)
+        .def_readonly("eax", &WOW64_CONTEXT::Eax)
+        .def_readonly("ebx", &WOW64_CONTEXT::Ebx)
+        .def_readonly("ecx", &WOW64_CONTEXT::Ecx)
+        .def_readonly("edx", &WOW64_CONTEXT::Edx)
+        .def_readonly("esi", &WOW64_CONTEXT::Esi)
+        .def_readonly("edi", &WOW64_CONTEXT::Edi)
+        .def_readonly("esp", &WOW64_CONTEXT::Esp)
+        .def_readonly("ebp", &WOW64_CONTEXT::Ebp)
+        .def_readonly("eip", &WOW64_CONTEXT::Eip);
+
 
     py::class_<TTD::Cursor>(m, "Cursor")
         .def("set_position", py::overload_cast<TTD::Position*>(&TTD::Cursor::SetPosition), py::arg("position"))
@@ -87,6 +143,10 @@ PYBIND11_MODULE(pyTTD, m) {
         .def("get_thread_info", py::overload_cast<>(&TTD::Cursor::GetThreadInfo))
         .def("get_crossplatform_context", py::overload_cast<>(&TTD::Cursor::GetCrossPlatformContext))
         .def("get_crossplatform_context", py::overload_cast<uint32_t>(&TTD::Cursor::GetCrossPlatformContext), py::arg("threadid"))
+        .def("get_context_x86_64", py::overload_cast<>(&TTD::Cursor::GetContextx86_64))
+        .def("get_context_x86_64", py::overload_cast<uint32_t>(&TTD::Cursor::GetContextx86_64), py::arg("threadid"))
+        .def("get_context_x86", py::overload_cast<>(&TTD::Cursor::GetContextx86))
+        .def("get_context_x86", py::overload_cast<uint32_t>(&TTD::Cursor::GetContextx86), py::arg("threadid"))
         .def("read_mem", [](TTD::Cursor &self, TTD::GuestAddress addr, unsigned __int64 size) {
             TTD::MemoryBuffer *membuf = self.QueryMemoryBuffer(addr, size);
             std::string x((char*) membuf->data, membuf->size);
@@ -132,10 +192,55 @@ PYBIND11_MODULE(pyTTD, m) {
         .def("get_last_position", &TTD::ReplayEngine::GetLastPosition)
         .def("get_peb_address", &TTD::ReplayEngine::GetPebAddress)
         .def("new_cursor", &TTD::ReplayEngine::NewCursor)
+        .def("get_module_loaded_event_count", &TTD::ReplayEngine::GetModuleLoadedEventCount)
+        .def("get_module_loaded_event_list", [](TTD::ReplayEngine& self) {
+            std::vector<TTD::TTD_Replay_ModuleLoadedEvent> mods;
+            const TTD::TTD_Replay_ModuleLoadedEvent* mod_list = self.GetModuleLoadedEventList();
+            for (int i = 0; i < self.GetModuleLoadedEventCount(); i++) {
+                mods.push_back(mod_list[i]);
+            }
+            return mods;
+        })
+        .def("get_module_unloaded_event_count", &TTD::ReplayEngine::GetModuleUnloadedEventCount)
+        .def("get_module_unloaded_event_list", [](TTD::ReplayEngine& self) {
+            std::vector<TTD::TTD_Replay_ModuleUnloadedEvent> mods;
+            const TTD::TTD_Replay_ModuleUnloadedEvent* mod_list = self.GetModuleUnloadedEventList();
+            for (int i = 0; i < self.GetModuleUnloadedEventCount(); i++) {
+                mods.push_back(mod_list[i]);
+            }
+            return mods;
+        })
+        .def("get_thread_created_event_count", &TTD::ReplayEngine::GetThreadCreatedEventCount)
+        .def("get_thread_created_event_list", [](TTD::ReplayEngine& self) {
+            std::vector<TTD::TTD_Replay_ThreadCreatedEvent> thrds;
+            const TTD::TTD_Replay_ThreadCreatedEvent* thrd_list = self.GetThreadCreatedEventList();
+            for (int i = 0; i < self.GetThreadCreatedEventCount(); i++) {
+                thrds.push_back(thrd_list[i]);
+            }
+            return thrds;
+        })
+        .def("get_thread_terminated_event_count", &TTD::ReplayEngine::GetThreadTerminatedEventCount)
+        .def("get_thread_terminated_event_list", [](TTD::ReplayEngine& self) {
+            std::vector<TTD::TTD_Replay_ThreadTerminatedEvent> thrds;
+            const TTD::TTD_Replay_ThreadTerminatedEvent* thrd_list = self.GetThreadTerminatedEventList();
+            for (int i = 0; i < self.GetThreadTerminatedEventCount(); i++) {
+                thrds.push_back(thrd_list[i]);
+            }
+            return thrds;
+        })
+        .def("get_exception_event_count", &TTD::ReplayEngine::GetExceptionEventCount)
+        .def("get_exception_event_list", [](TTD::ReplayEngine& self) {
+            std::vector<TTD::TTD_Replay_ExceptionEvent> excps;
+            const TTD::TTD_Replay_ExceptionEvent* excp_list = self.GetExceptionEventList();
+            for (int i = 0; i < self.GetExceptionEventCount(); i++) {
+                excps.push_back(excp_list[i]);
+            }
+            return excps;
+        })
         .def("get_module_count", &TTD::ReplayEngine::GetModuleCount)
         .def("get_module_list", [](TTD::ReplayEngine& self) {
             std::vector<TTD::TTD_Replay_Module> mods;
-            TTD::TTD_Replay_Module* mod_list = self.GetModuleList();
+            const TTD::TTD_Replay_Module* mod_list = self.GetModuleList();
             for (int i = 0; i < self.GetModuleCount(); i++) {
                 mods.push_back(mod_list[i]);
             }

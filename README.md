@@ -10,6 +10,8 @@ Bindings (PoC) for [Microsoft WinDBG Time Travel Debugging (TTD)](https://docs.m
 * `example_api/` highlights some of the wrapping
 * `example_diff/` shows how to use the wrapping to perform naive trace diffing
 * `example_calltree/` produces a call tree of a trace excerpt
+* `example_cov/` produces a [Lighthouse](https://github.com/gaasedelen/lighthouse) compatible coverage of modules in a trace excerpt 
+* `example_tenet/` produces a [Tenet](https://github.com/gaasedelen/tenet) compatible trace from a TTD trace
 * `python-bindings/` provides Python bindings over TTD
 
 After performing one or several traces using Windbg Preview, one can open the `.run` file:
@@ -276,6 +278,87 @@ ModuleList:
 ...
 ```
 
+## Example: coverage
+
+To understand what a code is actually doing, one can extract the instruction coverage of a trace.
+To do so, `example_cov` is a tool which:
+
+* list available modules for filtering
+* for each target, add a breakpoint on execution, from the module's base address to its end
+* register a `MemoryWatchpointCallback`:
+  * track in a set each breakpoint's address hitted
+* run through a part of the trace
+* export the resultings addresses in `module_name.trace.txt` files
+
+Here is an example with a trace of the *Local Session Manager* (`lsm.dll`):
+
+```bash
+# Run the tool
+example_cov.exe -m lsm D:\traces\lsm.run
+# After a few seconds:
+Openning the trace
+Tracking lsm
+Number of entry: 0x1000, current position 13b6:26
+Number of entry: 0x1000, current position c03:9
+Number of entry: 0x2000, current position 134f:5b
+Number of entry: 0x3000, current position 1991:205
+Number of entry: 0x3000, current position 720c:1d
+Number of entry: 0x3000, current position 36af:28
+Number of entry: 0x3000, current position 7b01:10
+Number of entry: 0x4000, current position 100d2:396
+Number of entry: 0x4000, current position a7fd:18
+Number of entry: 0x4000, current position ff7f:17c
+Got 0x42f9 addresses
+Dump to file lsm.trace.txt
+```
+
+The `lsm.trace.txt` file looks like:
+
+```bash
+lsm+1eb0
+lsm+1eb7
+lsm+1eba
+lsm+1ebe
+...
+```
+
+As this format is compatible with [Lighthouse](https://github.com/gaasedelen/lighthouse), one can visualize it in IDA:
+
+![](lsm_coverage.png)
+
+By doing several traces, or one trace with several call splitted using `-b` (*begin*) and `-e` (*end*) arguments, one can obtain overlapping coverage map.
+Diffing them could be a great way to identify specific code snippets.
+
+## Example: Trace exploration in IDA
+
+[Tenet](https://github.com/gaasedelen/tenet) is a "Trace Explorer" plug-in for IDA.
+Please refer to the official website for the full feature description.
+
+The `example_tenet` example produces a Tenet compatible trace for a given module, from a TTD trace.
+
+For instance:
+```bash
+# Run the tool, for the module `lsm.dll`
+example_tenet.exe -m lsm D:\traces\lsm.run
+# The output is in `lsm.trace.tenet`
+Openning the trace
+Track c:\windows\system32\lsm.dll [7fffcb3e0000 to 7fffcb491fff]
+Dump to file lsm.trace.tenet
+0x1000 instructions...
+0x2000 instructions...
+0x3000 instructions...
+0x4000 instructions...
+0x5000 instructions...
+0x6000 instructions...
+0x7000 instructions...
+```
+
+As a side note, if the TTD trace is going to other modules (such as `memcpy` implementation), the difference from the `call` instruction and the next one will provide a summary of all memory accesses done by `memcpy`.
+
+The resulting `lsm.trace.tenet` can then be loaded in IDA:
+
+![](tenet.png)
+
 ## Python
 
 ### Setup
@@ -309,7 +392,7 @@ cursor.set_position(first)
 print(f"PC: {cursor.get_program_counter():x}")
 
 # Print RCX
-ctxt = cursor.get_crossplatform_context()
+ctxt = cursor.get_context_x86_64()
 print("RCX: %x" % ctxt.rcx)
 
 # Read the memory at RCX on 16 bytes

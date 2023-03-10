@@ -42,24 +42,31 @@ namespace TTD {
 		return this->cursor->ICursor->GetThreadInfo(cursor, ThreadId);
 	}
 
-	struct TTD_Replay_RegisterContext* Cursor::GetCrossPlatformContext()
+	void* Cursor::GetCrossPlatformContext()
 	{
 		return this->GetCrossPlatformContext(0);
 	}
 
-	struct TTD_Replay_RegisterContext* Cursor::GetCrossPlatformContext(uint32_t threadId) {
-		TTD_Replay_RegisterContext* ctxt = (TTD_Replay_RegisterContext*)malloc(0xA70);
+	//The caller should free ctxt after call GetCrossPlatformContext function
+	void* Cursor::GetCrossPlatformContext(uint32_t threadId) {
+		void* ctxt = malloc(0xA70);
+		if (NULL == ctxt)
+			return NULL;
 		return this->cursor->ICursor->GetCrossPlatformContext(cursor, ctxt, threadId);
 	}
 
+	//The caller should free memorybuffer and memorybuffer->data (same value as buf->dst_buffer) after call QueryMemoryBuffer function
 	struct MemoryBuffer* Cursor::QueryMemoryBuffer(GuestAddress address, unsigned __int64 size) {
-		struct MemoryBuffer* memorybuffer = (struct MemoryBuffer*) malloc(sizeof(struct MemoryBuffer));
+		struct MemoryBuffer* memorybuffer = (struct MemoryBuffer*)malloc(sizeof(struct MemoryBuffer));
 		struct TBuffer* buf = (struct TBuffer*)malloc(sizeof(struct TBuffer));
-		if (buf == NULL)
+		if (NULL == buf || NULL == memorybuffer)
 			return NULL;
 		buf->size = size;
 		buf->dst_buffer = (void*)malloc(size);
+		if (NULL == buf->dst_buffer)
+			return NULL;
 		this->cursor->ICursor->QueryMemoryBuffer(cursor, memorybuffer, address, buf, 0);
+		free(buf);
 		return memorybuffer;
 	}
 
@@ -75,12 +82,24 @@ namespace TTD {
 		return this->cursor->ICursor->SetCallReturnCallback(cursor, callCallback, callback_value);
 	}
 
+	void Cursor::SetMemoryWatchpointCallback(PROC_MemCallback memCallback, unsigned __int64 callback_value) {
+		return this->cursor->ICursor->SetMemoryWatchpointCallback(cursor, memCallback, callback_value);
+	}
+
 	Position* Cursor::GetPosition(unsigned int ThreadId) {
 		return this->cursor->ICursor->GetPosition(cursor, ThreadId);
 	}
 
 	Position* Cursor::GetPosition() {
 		return this->GetPosition(0);
+	}
+
+	Position* Cursor::GetPreviousPosition(unsigned int ThreadId) {
+		return this->cursor->ICursor->GetPreviousPosition(cursor, ThreadId);
+	}
+
+	Position* Cursor::GetPreviousPosition() {
+		return this->GetPreviousPosition(0);
 	}
 
 	bool Cursor::AddMemoryWatchpoint(TTD_Replay_MemoryWatchpointData* data) {
@@ -172,7 +191,82 @@ namespace TTD {
 		return this->engine->IReplayEngine->GetModuleCount(engine);
 	}
 
-	struct TTD_Replay_Module* ReplayEngine::GetModuleList() {
+	const TTD_Replay_Module* ReplayEngine::GetModuleList() {
 		return this->engine->IReplayEngine->GetModuleList(engine);
+	}
+
+	unsigned __int64  ReplayEngine::GetModuleLoadedEventCount()
+	{
+		return this->engine->IReplayEngine->GetModuleLoadedEventCount(engine);
+	}
+
+	const TTD_Replay_ModuleLoadedEvent* ReplayEngine::GetModuleLoadedEventList()
+	{
+		return this->engine->IReplayEngine->GetModuleLoadedEventList(engine);
+	}
+
+	const std::vector<TTD_Replay_ModuleLoadedEvent> ReplayEngine::GetModuleLoadedEvents()
+	{
+		return std::vector<TTD_Replay_ModuleLoadedEvent>(this->GetModuleLoadedEventList(), this->GetModuleLoadedEventList() + this->GetModuleLoadedEventCount());
+	}
+
+	unsigned __int64 ReplayEngine::GetModuleUnloadedEventCount()
+	{
+		return this->engine->IReplayEngine->GetModuleUnloadedEventCount(engine);
+	}
+
+	const TTD_Replay_ModuleUnloadedEvent* ReplayEngine::GetModuleUnloadedEventList()
+	{
+		return this->engine->IReplayEngine->GetModuleUnloadedEventList(engine);
+	}
+
+	const std::vector<TTD_Replay_ModuleUnloadedEvent> ReplayEngine::GetModuleUnloadedEvents()
+	{
+		return std::vector<TTD_Replay_ModuleUnloadedEvent>(this->GetModuleUnloadedEventList(), this->GetModuleUnloadedEventList() + this->GetModuleUnloadedEventCount());
+	}
+
+	unsigned __int64 ReplayEngine::GetThreadCreatedEventCount()
+	{
+		return this->engine->IReplayEngine->GetThreadCreatedEventCount(engine);
+	}
+
+	const TTD_Replay_ThreadCreatedEvent* ReplayEngine::GetThreadCreatedEventList()
+	{
+		return this->engine->IReplayEngine->GetThreadCreatedEventList(engine);
+	}
+
+	const std::vector<TTD_Replay_ThreadCreatedEvent> ReplayEngine::GetThreadCreatedEvents()
+	{
+		return std::vector<TTD_Replay_ThreadCreatedEvent>(this->GetThreadCreatedEventList(), this->GetThreadCreatedEventList() + this->GetThreadCreatedEventCount());
+	}
+
+	unsigned __int64 ReplayEngine::GetThreadTerminatedEventCount()
+	{
+		return this->engine->IReplayEngine->GetThreadTerminatedEventCount(engine);
+	}
+
+	const TTD_Replay_ThreadTerminatedEvent* ReplayEngine::GetThreadTerminatedEventList()
+	{
+		return this->engine->IReplayEngine->GetThreadTerminatedEventList(engine);
+	}
+
+	const std::vector<TTD_Replay_ThreadTerminatedEvent> ReplayEngine::GetThreadTerminatedEvents()
+	{
+		return std::vector<TTD_Replay_ThreadTerminatedEvent>(this->GetThreadTerminatedEventList(), this->GetThreadTerminatedEventList() + this->GetThreadTerminatedEventCount());
+	}
+
+	unsigned __int64 ReplayEngine::GetExceptionEventCount()
+	{
+		return this->engine->IReplayEngine->GetExceptionEventCount(engine);
+	}
+
+	const TTD_Replay_ExceptionEvent* ReplayEngine::GetExceptionEventList()
+	{
+		return this->engine->IReplayEngine->GetExceptionEventList(engine);
+	}
+
+	const std::vector<TTD_Replay_ExceptionEvent> ReplayEngine::GetExceptionEvents()
+	{
+		return std::vector<TTD_Replay_ExceptionEvent>(this->GetExceptionEventList(), this->GetExceptionEventList() + this->GetExceptionEventCount());
 	}
 }

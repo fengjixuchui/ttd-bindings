@@ -24,13 +24,25 @@ void callCallback(unsigned __int64 callback_value, TTD::GuestAddress addr_func, 
 	return;
 }
 
+/*
+* @callback_value: value passed at callback registering
+* Returns TRUE to stop execution on break
+*/
+bool memCallback(unsigned __int64 callback_value, TTD::TTD_Replay_MemoryWatchpointResult* mem, struct TTD::TTD_Replay_IThreadView* thread_info) {
+	printf("[MEM CALLBACK] ");
+	printf("callback_value: %llx, guest_addr: %llx, size: %llx, flags: %llx\n", callback_value, mem->addr, mem->size, mem->flags);
+	TTD::Position* current = thread_info->IThreadView->GetPosition(thread_info);
+	printf("Program counter: %llx | Position: %llx:%llx\n", thread_info->IThreadView->GetProgramCounter(thread_info), current->Major, current->Minor);
+	return TRUE;
+}
+
 int main()
 {
 	TTD::ReplayEngine ttdengine = TTD::ReplayEngine();
 	int result;
 
 	std::cout << "Openning the trace\n";
-	result = ttdengine.Initialize(L"D:\\traces\\demo.run");
+	result = ttdengine.Initialize(L"D:\\traces\\lsm_rpc.run");
 	if (result == 0) {
 		std::cout << "Fail to open the trace";
 		exit(-1);
@@ -49,7 +61,7 @@ int main()
 
 	std::cout << "Last Position:\n";
 	TTD::Position* last = ttdengine.GetLastPosition();
-	printf("%llx:%llx\n", last->Major, last->Minor);
+	printf("%llx:%llx\n", last->Major, last->Minor); 
 
 	std::cout << "Peb:\n";
 	printf("%llx\n", ttdengine.GetPebAddress());
@@ -80,11 +92,12 @@ int main()
 	DumpHex(ttdcursor.GetThreadInfo(), 0x20);
 
 	std::cout << "\nContext:\n";
-	TTD::TTD_Replay_RegisterContext* ctxt = ttdcursor.GetCrossPlatformContext();
+    // Use  ttdcursor.GetContextx86() for x86 context
+    auto ctxt = ttdcursor.GetContextx86_64();
 	DumpHex(ctxt, 0xA70);
-	printf("RCX: %llx\n", ctxt->rcx);
+	printf("RCX: %llx\n", ctxt->Rcx);
 	std::cout << "Query memory @rcx:\n";
-	struct TTD::MemoryBuffer* memorybuffer = ttdcursor.QueryMemoryBuffer(ctxt->rcx, 0x30);
+	struct TTD::MemoryBuffer* memorybuffer = ttdcursor.QueryMemoryBuffer(ctxt->Rcx, 0x30);
 	if (memorybuffer->data == NULL) {
 		printf("Query Memory fail: memory do not exists in trace");
 	}
@@ -135,9 +148,15 @@ int main()
 	std::cout << ttdengine.GetModuleCount() << "\n";
 
 	std::cout << "ModuleList:\n";
-	TTD::TTD_Replay_Module* mod_list = ttdengine.GetModuleList();
+	const TTD::TTD_Replay_Module* mod_list = ttdengine.GetModuleList();
 	for (int i = 0; i < ttdengine.GetModuleCount(); i++) {
 		printf("%llx\t%llx\t%ls\n", mod_list[i].base_addr, mod_list[i].imageSize, mod_list[i].path);
+	}
+
+	std::cout << "ExceptionList:" << std::endl;
+	for (const auto& exceptionEvent : ttdengine.GetExceptionEvents())
+	{
+		std::cout << "Exception raised at : 0x" << std::hex << exceptionEvent.info.ExceptionAddress << std::endl;
 	}
 
 	std::cout << "Remove callback\n";
@@ -148,6 +167,7 @@ int main()
 	data.size = 4;
 	data.flags = TTD::BP_FLAGS::READ;
 	ttdcursor.AddMemoryWatchpoint(&data);
+	ttdcursor.SetMemoryWatchpointCallback((TTD::PROC_MemCallback)memCallback, 1234);
 	ttdcursor.ReplayForward(&replayrez, last, -1);
 	printf("%llx\n", ttdcursor.GetProgramCounter());
 	ttdcursor.RemoveMemoryWatchpoint(&data);
@@ -159,4 +179,48 @@ int main()
 	ttdcursor.AddMemoryWatchpoint(&data);
 	ttdcursor.ReplayForward(&replayrez, last, -1);
 	printf("%llx\n", ttdcursor.GetProgramCounter());
+
+	// Exemple of timeline
+	std::cout << "Timeline" << std::endl;
+	auto moduleLoaded = ttdengine.GetModuleLoadedEvents();
+	auto moduleUnloaded = ttdengine.GetModuleUnloadedEvents();
+	auto threadCreate = ttdengine.GetThreadCreatedEvents();
+	auto threadTerminate = ttdengine.GetThreadTerminatedEvents();
+
+	auto itModuleLoaded = moduleLoaded.begin();
+	auto itModuleUnloaded = moduleUnloaded.begin();
+	auto itThreadCreate = threadCreate.begin();
+	auto itThreadTerminate = threadTerminate.begin();
+
+	while (itModuleLoaded != moduleLoaded.end() || itModuleUnloaded != moduleUnloaded.end() || itThreadCreate != threadCreate.end() || itThreadTerminate != threadTerminate.end())
+	{
+		TTD::Position moduleLoadedPosition = (itModuleLoaded == moduleLoaded.end()) ? TTD::POSITION_MAX : itModuleLoaded->pos;
+		TTD::Position moduleUnloadedPosition = (itModuleUnloaded == moduleUnloaded.end()) ? TTD::POSITION_MAX : itModuleUnloaded->pos;
+		TTD::Position threadCreatePosition = (itThreadCreate == threadCreate.end()) ? TTD::POSITION_MAX : itThreadCreate->pos;
+		TTD::Position threadTerminatePosition = (itThreadTerminate == threadTerminate.end()) ? TTD::POSITION_MAX : itThreadTerminate->pos;
+
+ 		if (moduleLoadedPosition < moduleUnloadedPosition && moduleLoadedPosition < threadCreatePosition && moduleLoadedPosition < threadTerminatePosition)
+		{
+			std::wcout << "Module Loaded at " << std::hex << itModuleLoaded->pos.Major << ":" << std::hex << itModuleLoaded->pos.Minor << " : " << std::wstring(itModuleLoaded->info->path) << std::endl;
+			itModuleLoaded++;
+		}
+
+		if (moduleUnloadedPosition < moduleLoadedPosition && moduleUnloadedPosition < threadCreatePosition && moduleUnloadedPosition < threadTerminatePosition)
+		{
+			std::wcout << "Module Unloaded at " << std::hex << itModuleUnloaded->pos.Major << ":" << std::hex << itModuleUnloaded->pos.Minor << " : " << std::wstring(itModuleUnloaded->info->path) << std::endl;
+			itModuleUnloaded++;
+		}
+
+		if (threadCreatePosition < moduleLoadedPosition && threadCreatePosition < moduleLoadedPosition && threadCreatePosition < threadTerminatePosition)
+		{
+			std::wcout << "Thread Created at " << std::hex << itThreadCreate->pos.Major << ":" << std::hex << itThreadCreate->pos.Minor << " id : " << std::hex << itThreadCreate->info->threadid << std::endl;
+			itThreadCreate++;
+		}
+
+		if (threadTerminatePosition < moduleLoadedPosition && threadTerminatePosition < moduleLoadedPosition && threadTerminatePosition < threadCreatePosition)
+		{
+			std::wcout << "Thread Terminated at " << std::hex << itThreadTerminate->pos.Major << ":" << std::hex << itThreadTerminate->pos.Minor << " id : " << std::hex << itThreadTerminate->info->threadid << std::endl;
+			itThreadTerminate++;
+		}
+	}
 }
